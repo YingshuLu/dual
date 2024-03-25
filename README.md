@@ -1,2 +1,2 @@
-# dualego
+# dual
 VPN for router

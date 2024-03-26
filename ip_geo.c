@@ -1,14 +1,64 @@
-#include "ip_geo.h"
+#include <stdlib.h>
+#include <string.h>
+#include <stdatomic.h>
+#include <arpa/inet.h>
 
+#include "maxmind/maxminddb.h"
 
-int jailed_ipaddr(struct sockaddr*ipaddr) {
+volatile MMDB_s *g_mmdb = NULL;
 
-MMDB_lookup_result_s result =
-    MMDB_lookup_sockaddr(&mmdb, address->ai_addr, &mmdb_error);
-MMDB_entry_data_s entry_data;
-int status =
-    MMDB_get_value(&result.entry, &entry_data,
-                   "names", "en", NULL);
-if (MMDB_SUCCESS != status) { ... }
-if (entry_data.has_data) { ... }
+int ipgeo_close(MMDB_s *pm)
+{
+    if (pm == NULL)
+    {
+        return -1;
+    }
+
+    MMDB_close(pm);
+    free(pm);
+    return 0;
+}
+
+int ipgeo_load(const char *filename)
+{
+    MMDB_s *pm = (MMDB_s *)malloc(sizeof(MMDB_s));
+    int status = MMDB_open(filename, MMDB_MODE_MMAP, pm);
+    if (MMDB_SUCCESS != status)
+    {
+        return -1;
+    }
+
+    MMDB_s *om = (MMDB_s *)atomic_exchange(&g_mmdb, pm);
+    ipgeo_close(om);
+    return 0;
+}
+
+int ipgeo_jailed(const struct sockaddr *ipaddr)
+{
+    int mmdb_error;
+    MMDB_s *pm = (MMDB_s *)atomic_load(&g_mmdb);
+    MMDB_lookup_result_s result = MMDB_lookup_sockaddr(pm, ipaddr, &mmdb_error);
+    if (MMDB_SUCCESS != mmdb_error)
+    {
+        return -1;
+    }
+
+    if (result.found_entry)
+    {
+        MMDB_entry_data_s entry_data;
+        int status = MMDB_get_value(&result.entry, &entry_data, "country", "iso_code", NULL);
+        if (MMDB_SUCCESS != status)
+        {
+            return -1;
+        }
+
+        if (entry_data.has_data && MMDB_DATA_TYPE_UTF8_STRING == entry_data.type)
+        {
+            if (strncmp("CN", entry_data.utf8_string, 2) == 0)
+            {
+                return 1;
+            }
+        }
+    }
+    return 0;
 }

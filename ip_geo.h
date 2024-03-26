@@ -1,8 +1,11 @@
+#ifndef IPGEO_LOOKUP_H
+#define IPGEO_LOOKUP_H
 
-#include <maxminddb.h>
+#include <arpa/inet.h>
 
-int ipgeo_open(const char* file, MMDB_s* mmdb);
+int ipgeo_load(const char* filename);
 
-int ipgeo_jailed_ipaddr(MMDB_s* mmdb, const char* ipaddr);
+int ipgeo_jailed(const struct sockaddr* ipaddr);
 
-int ipgeo_close(MMDB_s* mmdb);
+
+#endif

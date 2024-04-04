@@ -3,9 +3,8 @@
 
 #include <arpa/inet.h>
 
-int ipgeo_load(const char* filename);
+int ipgeo_load(const char *filename);
 
-int ipgeo_jailed(const struct sockaddr* ipaddr);
-
+int ipgeo_jailed(const struct sockaddr *ipaddr);
 
 #endif

@@ -5,7 +5,15 @@
 
 #include "maxmind/maxminddb.h"
 
+#include "http.h"
+
+static const char *ipgeo_database_url =
+    "https://cdn.jsdelivr.net/gh/alecthw/mmdb_china_ip_list@release/"
+    "Country.mmdb";
+
 volatile MMDB_s *g_mmdb = NULL;
+
+static int file_rotate = 0;
 
 int ipgeo_close(MMDB_s *pm) {
   if (pm == NULL) {
@@ -52,4 +60,35 @@ int ipgeo_jailed(const struct sockaddr *ipaddr) {
     }
   }
   return 0;
+}
+
+int ipgeo_fetch(const char *filename) {
+  const char *body = NULL;
+  size_t body_len = 0;
+  int res = http_get(ipgeo_database_url, &body, &body_len);
+  if (res != 0) {
+    return res;
+  }
+
+  FILE *file = fopen(filename, "w");
+  res = fwrite(body, 1, body_len, file);
+  if (res <= 0) {
+    return res;
+  }
+
+  fclose(file);
+  free((void *)body);
+  return 0;
+}
+
+int ipgeo_update() {
+  char filename[64] = {0};
+  snprintf(filename, 64, "ipgeo-%d.mmdb", file_rotate);
+  file_rotate = 1 - file_rotate;
+  int res = ipgeo_fetch(filename);
+  if (res != 0) {
+    return res;
+  }
+
+  return ipgeo_load(filename);
 }

@@ -11,4 +11,6 @@ int http_host(const char *buffer, const size_t buffer_len, const char **host,
 int ssl_host(const char *bytes, size_t bytes_len, const char **host,
              size_t *len);
 
+int http_get(const char *url, const char **body, size_t *body_len);
+
 #endif

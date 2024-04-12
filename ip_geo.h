@@ -1,7 +1,9 @@
-#ifndef IPGEO_LOOKUP_H
-#define IPGEO_LOOKUP_H
+#ifndef DUAL_IPGEO_H
+#define DUAL_IPGEO_H
 
 #include <arpa/inet.h>
+
+int ipgeo_update();
 
 int ipgeo_load(const char *filename);
 

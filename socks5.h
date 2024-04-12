@@ -1,5 +1,5 @@
-#ifndef SOCKS5_PROTO
-#define SOCKS5_PROTO
+#ifndef DUAL_SOCKS5_H
+#define DUAL_SOCKS5_H
 
 #include <arpa/inet.h>
 

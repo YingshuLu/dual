@@ -1,5 +1,8 @@
 #include <arpa/inet.h>
 #include <ctype.h>
+#include <curl/curl.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "picohttpparser.h"
 
@@ -86,5 +89,58 @@ int ssl_host(const char *bytes, size_t bytes_len, const char **host,
       curr += ext_len;
   }
 
+  return 0;
+}
+
+struct curl_data {
+  char *body;
+  size_t body_len;
+  size_t buffer_len;
+};
+
+size_t write_callback(char *ptr, size_t size, size_t nmemb, void *userdata) {
+  struct curl_data *pdata = (struct curl_data *)userdata;
+  if (pdata->body_len + size * nmemb > pdata->buffer_len) {
+    size_t buffer_len = 2 * (pdata->body_len + size * nmemb);
+    char *buffer = malloc(buffer_len);
+    pdata->buffer_len = buffer_len;
+    memcpy(buffer, pdata->body, pdata->body_len);
+    free(pdata->body);
+    pdata->body = buffer;
+  }
+
+  memcpy(pdata->body + pdata->body_len, ptr, size * nmemb);
+  pdata->body_len += size * nmemb;
+  return size * nmemb;
+}
+
+int http_get(const char *url, const char **body, size_t *body_len) {
+  CURL *curl = NULL;
+  CURLcode res;
+
+  curl = curl_easy_init();
+  if (!curl) {
+    return -1;
+  }
+
+  struct curl_data userdata;
+  userdata.body = NULL;
+  userdata.body_len = 0;
+  userdata.buffer_len = 0;
+
+  curl_easy_setopt(curl, CURLOPT_URL, url);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &userdata);
+
+  res = curl_easy_perform(curl);
+  if (res != CURLE_OK) {
+    if (userdata.body) {
+      free(userdata.body);
+    }
+    return -1;
+  }
+  curl_easy_cleanup(curl);
+  *body = userdata.body;
+  *body_len = userdata.body_len;
   return 0;
 }

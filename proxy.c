@@ -3,11 +3,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <time.h>
 #include <unistd.h>
+
+#include "libcask/co_await.h"
+#include "libcask/co_define.h"
+#include "libcask/sys_helper.h"
 
 #include "http.h"
 #include "ip_geo.h"
-#include "libcask/co_define.h"
+#include "record.h"
+#include "refer.h"
+#include "site.h"
 #include "socks5.h"
 
 #define TPROXY_BIND_PORT 1234
@@ -22,16 +29,18 @@ struct proxy_info {
   int target_fd;
   struct sockaddr_in client_addr;
   struct sockaddr_in intended_addr;
+  struct record *record;
 };
 
 struct tunnel_state {
+  struct ref_t ref;
   int closed;
-  int ref_cnt;
 };
 
 struct tunnel_info {
   int read_fd;
   int write_fd;
+  struct record *record;
   struct tunnel_state *state;
 };
 
@@ -41,8 +50,13 @@ void init() {
   tunnel_addr.sin_port = htons(TUNNEL_BIND_PORT);
 
   if (0 != ipgeo_load("./GeoLite2-Country.mmdb")) {
-    DBG_LOG("ERROR: ipgeo failed to load MMDB");
+    INF_LOG("ERROR: ipgeo failed to load MMDB");
     exit(1);
+  }
+
+  int rc = record_init();
+  if (0 != rc) {
+    INF_LOG("ERROR: record init failed");
   }
 }
 
@@ -51,27 +65,29 @@ void crash(const char *msg) {
   exit(1);
 }
 
+struct proxy_info *new_proxy_info() {
+  return calloc(1, sizeof(struct proxy_info));
+}
+
+void free_proxy_info(struct proxy_info *pinfo) {
+  defer_record(pinfo->record);
+  free(pinfo);
+}
+
 struct tunnel_state *new_state() {
-  struct tunnel_state *pstate = malloc(sizeof(struct tunnel_state));
-  pstate->closed = 0;
-  pstate->ref_cnt = 0;
+  struct tunnel_state *pstate = calloc(1, sizeof(struct tunnel_state));
   return pstate;
 }
 
 struct tunnel_state *refer_state(struct tunnel_state *pstate) {
-  pstate->ref_cnt += 1;
+  refer(pstate);
   return pstate;
 }
 
-void defer_state(struct tunnel_state *pstate) {
-  pstate->ref_cnt -= 1;
-  if (pstate->ref_cnt == 0) {
-    free(pstate);
-  }
-}
+void defer_state(struct tunnel_state *pstate) { defer(pstate); }
 
 struct tunnel_info *new_tunnel_info(int rd, int wd, struct tunnel_state *ps) {
-  struct tunnel_info *pinfo = malloc(sizeof(struct tunnel_info));
+  struct tunnel_info *pinfo = calloc(1, sizeof(struct tunnel_info));
   pinfo->read_fd = rd;
   pinfo->write_fd = wd;
   pinfo->state = refer_state(ps);
@@ -80,6 +96,7 @@ struct tunnel_info *new_tunnel_info(int rd, int wd, struct tunnel_state *ps) {
 
 void free_tunnel_info(struct tunnel_info *pinfo) {
   defer_state(pinfo->state);
+  defer_record(pinfo->record);
   free(pinfo);
 }
 
@@ -108,6 +125,10 @@ void do_tunnel(void *ip, void *op) {
     pinfo->state->closed = 1;
     DBG_LOG("shutdown socket %d", pinfo->write_fd);
     shutdown(pinfo->write_fd, SHUT_RDWR);
+  }
+
+  if (pinfo->record) {
+    pinfo->record->bytes += count;
   }
 
   free_tunnel_info(pinfo);
@@ -141,7 +162,7 @@ int peek_http_host(const int client_fd, int is_https, char *buffer,
     // TODO: why can not comment this log???, it causes http parser error...
     INF_LOG("[%s] try to peek host", proto);
     res = is_https ? ssl_host(buffer, nread, host, host_len)
-                       : http_host(buffer, nread, host, host_len);
+                   : http_host(buffer, nread, host, host_len);
     if (res == 1) {
       INF_LOG("[%s] tunnel %.*s", proto, *host_len, *host);
       res = 0;
@@ -155,7 +176,7 @@ int peek_http_host(const int client_fd, int is_https, char *buffer,
   } while (0);
 
   if (res != 0) {
-     ERR_LOG("[%s] peek host error: %d", proto, res);
+    ERR_LOG("[%s] peek host error: %d", proto, res);
   }
   return res;
 }
@@ -173,84 +194,97 @@ int connect_target(const struct sockaddr_in *target_addr) {
 
 void do_proxy(void *ip, void *op) {
   struct proxy_info *pinfo = (struct proxy_info *)ip;
-  const struct sockaddr_in *target_addr = NULL;
-  int escape = 0;
+  struct record *record = pinfo->record;
 
-  if (jailed_ipaddr(&pinfo->intended_addr) != 0) {
+  // check dst ipaddr
+  int ip_jailed = jailed_ipaddr(&pinfo->intended_addr);
+  record->ip_jailed = ip_jailed;
+  INF_LOG("ip %s jailed: %d", inet_ntoa(pinfo->intended_addr.sin_addr),
+          ip_jailed);
+
+  // check site
+  int host_jailed = 0;
+  int site_peeked = 0;
+  int intended_port = ntohs(pinfo->intended_addr.sin_port);
+  if (http_port(intended_port)) {
+    const char *intended_host = NULL;
+    size_t host_len = 0;
+    char buffer[TUNNEL_BUFFER_SIZE];
+
+    int is_https = 443 == intended_port;
+    site_peeked =
+        0 == peek_http_host(pinfo->client_fd, is_https, buffer,
+                            TUNNEL_BUFFER_SIZE, &intended_host, &host_len);
+
+    if (site_peeked) {
+      host_jailed = site_jailed(intended_host, host_len);
+      INF_LOG("site %.*s jailed: %d", host_len, intended_host, host_jailed);
+      record->site_jailed = host_jailed;
+      memcpy(&(record->host[0]), intended_host, host_len);
+    }
+  }
+
+  // policy to decide if tunneling or not
+  int escape = 0;
+  const struct sockaddr_in *target_addr = NULL;
+  if (1 == host_jailed || 1 == ip_jailed) {
     target_addr = &pinfo->intended_addr;
   } else {
     target_addr = &tunnel_addr;
     escape = 1;
   }
+  record->target = *target_addr;
 
-  int intended_port = ntohs(pinfo->intended_addr.sin_port);
-  if (escape) {
-    DBG_LOG("%s:%d escaping through -> %s:%d",
-            inet_ntoa(pinfo->intended_addr.sin_addr), intended_port, LOCALHOST,
-            TUNNEL_BIND_PORT);
-  }
-
+  // connect with target
   pinfo->target_fd = connect_target(target_addr);
   if (pinfo->target_fd <= 0) {
     ERR_LOG("connect to target %s:%d error %d",
             inet_ntoa(target_addr->sin_addr), ntohs(target_addr->sin_port),
             pinfo->target_fd);
     close(pinfo->client_fd);
-    free(pinfo);
+    free_proxy_info(pinfo);
     return;
   }
 
-  if (!http_port(intended_port)) {
-    // switch socks5 if need
-    if (escape) {
-      int res = ss5_handshake(pinfo->target_fd, &pinfo->intended_addr);
-      DBG_LOG("socks5 handshake success? %s", res == 0 ? "yes" : "no");
-      if (res != 0) {
-        close(pinfo->target_fd);
-        close(pinfo->client_fd);
-        free(pinfo);
-        return;
-      }
-    }
-  } else {
-    const char *intended_host = NULL;
-    size_t host_len = 0;
-    char buffer[TUNNEL_BUFFER_SIZE];
+  const char *dest_addr =
+      site_peeked ? record->host : inet_ntoa(pinfo->intended_addr.sin_addr);
 
-    int is_https = 443 == intended_port;
-    int peeked =
-        0 == peek_http_host(pinfo->client_fd, is_https, buffer,
-                            TUNNEL_BUFFER_SIZE, &intended_host, &host_len);
+  INF_LOG("dst %s tunnel? %s", dest_addr, escape ? "yes" : "no");
 
-    // switch socks5 if need
-    if (escape) {
-      int res = peeked ? ss5_handshake_hostname(pinfo->target_fd, intended_host,
-                                                host_len, intended_port)
-                       : ss5_handshake(pinfo->target_fd, &pinfo->intended_addr);
+  // switch socks5 if need
+  if (escape) {
+    int res = site_peeked
+                  ? ss5_handshake_hostname(pinfo->target_fd, record->host,
+                                           strlen(record->host), intended_port)
+                  : ss5_handshake(pinfo->target_fd, &pinfo->intended_addr);
 
-      DBG_LOG("socks5 handshake with %s success? %s", peeked ? "host" : "ip",
-              res == 0 ? "yes" : "no");
-      if (res != 0) {
-        close(pinfo->target_fd);
-        close(pinfo->client_fd);
-        free(pinfo);
-        return;
-      }
+    DBG_LOG("socks5 handshake with %s success? %s", site_peeked ? "host" : "ip",
+            res == 0 ? "yes" : "no");
+    if (res != 0) {
+      ERR_LOG("socks5 handshake with %s:%d error",
+              inet_ntoa(target_addr->sin_addr), ntohs(target_addr->sin_port));
+      close(pinfo->target_fd);
+      close(pinfo->client_fd);
+      free_proxy_info(pinfo);
+      return;
     }
   }
+
+  record->success = 1;
 
   // tunnel established
   struct tunnel_state *pstate = new_state();
 
   struct tunnel_info *tinfo =
       new_tunnel_info(pinfo->client_fd, pinfo->target_fd, pstate);
+  tinfo->record = refer_record(record);
   co_create(do_tunnel, tinfo, 0);
 
   struct tunnel_info *rinfo =
       new_tunnel_info(pinfo->target_fd, pinfo->client_fd, pstate);
   co_create(do_tunnel, rinfo, 0);
 
-  free(pinfo);
+  free_proxy_info(pinfo);
 }
 
 void server(void *ip, void *op) {
@@ -281,7 +315,7 @@ void server(void *ip, void *op) {
   INF_LOG("TPROXY listening on %s:%d", listen_addr, TPROXY_BIND_PORT);
 
   while (1) {
-    struct proxy_info *pinfo = calloc(1, sizeof(struct proxy_info));
+    struct proxy_info *pinfo = new_proxy_info();
     socklen_t client_addr_len = sizeof(pinfo->client_addr);
     socklen_t dest_addr_len = sizeof(pinfo->intended_addr);
 
@@ -289,7 +323,7 @@ void server(void *ip, void *op) {
         accept(listener_fd, (struct sockaddr *)&(pinfo->client_addr),
                &client_addr_len);
     if (client_fd <= 0) {
-      free(pinfo);
+      free_proxy_info(pinfo);
       break;
     }
 
@@ -297,13 +331,14 @@ void server(void *ip, void *op) {
     getsockname(client_fd, (struct sockaddr *)&(pinfo->intended_addr),
                 &dest_addr_len);
 
-    DBG_LOG("tunnel src from %s:%d",
-            inet_ntoa(pinfo->client_addr.sin_addr),
+    DBG_LOG("tunnel src from %s:%d", inet_ntoa(pinfo->client_addr.sin_addr),
             ntohs(pinfo->client_addr.sin_port));
 
-    INF_LOG("tunnel for dest %s:%d",
-            inet_ntoa(pinfo->intended_addr.sin_addr),
-            ntohs(pinfo->intended_addr.sin_port));
+    struct record *record = new_record();
+    time(&record->start_unixtime);
+    record->from = pinfo->client_addr;
+    record->to = pinfo->intended_addr;
+    pinfo->record = refer_record(record);
 
     co_create(do_proxy, pinfo, NULL);
   }
@@ -311,8 +346,31 @@ void server(void *ip, void *op) {
   close(listener_fd);
 }
 
+int site_reload(void *ip) { return site_load(); }
+int ipgeo_reload(void *ip) { return ipgeo_update(); }
+
+void site_branch(void *ip, void *op) {
+  do {
+    int rc = co_await(site_reload, ip);
+    if (rc != 0) {
+      ERR_LOG("site reload error: %d", rc);
+    } else {
+      INF_LOG("site reloaded!");
+    }
+
+    rc = co_await(ipgeo_reload, ip);
+    if (rc != 0) {
+      ERR_LOG("ipgeo reload error: %d", rc);
+    } else {
+      INF_LOG("ipgeo reloaded!");
+    }
+    co_sleep(12 * 3600 * 1000);
+  } while (1);
+}
+
 int main(int argc, char **argv) {
   init();
+  co_create(site_branch, 0, 0);
   co_create(server, 0, 0);
   schedule();
   return 0;

@@ -34,7 +34,7 @@ iptables -t mangle -A dual_local -d 127.0.0.0/8 -j RETURN
 iptables -t mangle -A dual_local -d 10.0.0.0/8 -j RETURN
 iptables -t mangle -A dual_local -d 172.16.0.0/12 -j RETURN
 iptables -t mangle -A dual_local -d 192.168.0.0/16 -j RETURN
-iptables -t mangle -A dual_local -d 169.254.0.0/16 -j RETUR
+iptables -t mangle -A dual_local -d 169.254.0.0/16 -j RETURN
 iptables -t mangle -A dual_local -d 224.0.0.0/4 -j RETURN
 iptables -t mangle -A dual_local -d 240.0.0.0/4 -j RETURN
 

@@ -67,13 +67,13 @@ int ipgeo_fetch(const char *filename) {
   size_t body_len = 0;
   int res = http_get(ipgeo_database_url, &body, &body_len);
   if (res != 0) {
-    return res;
+    return -2;
   }
 
   FILE *file = fopen(filename, "w");
   res = fwrite(body, 1, body_len, file);
   if (res <= 0) {
-    return res;
+    return -1;
   }
 
   fclose(file);

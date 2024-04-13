@@ -2,7 +2,9 @@ gcc  -o proxy proxy.c socks5.c ip_geo.c http.c picohttpparser.c site.c record.c 
 
 mkdir run
 
-mv -f  proxy                 run/
-cp -rf lib                   run/
-cp -f  GeoLite2-Country.mmdb run/
-cp -rf script/*.sh           run/
+cwd=`pwd`
+
+mv -f  $cwd/proxy                 $cwd/run/
+cp -rf $cwd/lib                   $cwd/run/
+cp -f  $cwd/data/*                $cwd/run/
+cp -f  $cwd/script/*              $cwd/run/

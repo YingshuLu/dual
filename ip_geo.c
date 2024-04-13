@@ -72,13 +72,10 @@ int ipgeo_fetch(const char *filename) {
 
   FILE *file = fopen(filename, "w");
   res = fwrite(body, 1, body_len, file);
-  if (res <= 0) {
-    return -1;
-  }
-
   fclose(file);
   free((void *)body);
-  return 0;
+
+  return res > 0? 0 : -1;
 }
 
 int ipgeo_update() {

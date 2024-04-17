@@ -4,45 +4,38 @@
 
 set -ex
 
-sysctl -w net.ipv4.ip_forward=1
+sysctl net.ipv4.conf.all.forwarding=1
+sysctl net.ipv4.conf.eth0.rp_filter=0
 
-# ROUTE RULES
-ip rule add fwmark 666 lookup 666
-ip route add local 0.0.0.0/0 dev lo table 666
+# skip local
+iptables -t mangle -N dual_skip
 
-# OUTSIDE TRAFFIC
-iptables -t mangle -N dual
+iptables -t mangle -A dual_skip -d 0.0.0.0/8 -j ACCEPT
+iptables -t mangle -A dual_skip -d 127.0.0.0/8 -j ACCEPT
+iptables -t mangle -A dual_skip -d 10.0.0.0/8 -j ACCEPT
+iptables -t mangle -A dual_skip -d 172.16.0.0/12 -j ACCEPT
+iptables -t mangle -A dual_skip -d 192.168.0.0/16 -j ACCEPT
+iptables -t mangle -A dual_skip -d 169.254.0.0/16 -j ACCEPT
+iptables -t mangle -A dual_skip -d 224.0.0.0/4 -j ACCEPT
+iptables -t mangle -A dual_skip -d 240.0.0.0/4 -j ACCEPT
 
-iptables -t mangle -A dual -d 0.0.0.0/8 -j RETURN
-iptables -t mangle -A dual -d 127.0.0.0/8 -j RETURN
-iptables -t mangle -A dual -d 10.0.0.0/8 -j RETURN
-iptables -t mangle -A dual -d 172.16.0.0/12 -j RETURN
-iptables -t mangle -A dual -d 192.168.0.0/16 -j RETURN
-iptables -t mangle -A dual -d 169.254.0.0/16 -j RETURN
-iptables -t mangle -A dual -d 224.0.0.0/4 -j RETURN
-iptables -t mangle -A dual -d 240.0.0.0/4 -j RETURN
+iptables -t mangle -A PREROUTING -j dual_skip
 
-iptables -t mangle -A dual -p tcp -j TPROXY --on-port 1234 --tproxy-mark 666
+# mark tcp
+iptables -t mangle -N dual_mark
 
-iptables -t mangle -A PREROUTING -j dual
+iptables -t mangle -A dual_mark -j MARK --set-mark 1
+iptables -t mangle -A dual_mark -j ACCEPT
 
-# INSIDE TRAFFIC
-iptables -t mangle -N dual_local
+iptables -t mangle -A PREROUTING -p tcp -m socket -j dual_mark
 
-iptables -t mangle -A dual_local -d 0.0.0.0/8 -j RETURN
-iptables -t mangle -A dual_local -d 127.0.0.0/8 -j RETURN
-iptables -t mangle -A dual_local -d 10.0.0.0/8 -j RETURN
-iptables -t mangle -A dual_local -d 172.16.0.0/12 -j RETURN
-iptables -t mangle -A dual_local -d 192.168.0.0/16 -j RETURN
-iptables -t mangle -A dual_local -d 169.254.0.0/16 -j RETURN
-iptables -t mangle -A dual_local -d 224.0.0.0/4 -j RETURN
-iptables -t mangle -A dual_local -d 240.0.0.0/4 -j RETURN
+# redirect tproxy
+iptables -t mangle -N dual_proxy
 
-iptables -t mangle -A dual_local -p tcp -j MARK --set-mark 666
+iptables -t mangle -A dual_proxy -p tcp -j TPROXY --tproxy-mark 0x1/0x1 --on-port 1234 --on-ip 127.0.0.1
 
-iptables -t mangle -A OUTPUT -p tcp -m owner --uid-owner dual -j RETURN
+iptables -t mangle -A PREROUTING -j dual_proxy
 
-iptables -t mangle -A OUTPUT -j dual_local
-
-sysctl -w net.ipv4.conf.all.route_localnet=1
-iptables -t nat -A PREROUTING -p icmp -d 198.18.0.0/16 -j DNAT --to-destination 127.0.0.1
+# route table
+ip -f inet rule add fwmark 1 lookup 100
+ip -f inet route add local 0.0.0.0/0 dev lo table 100

@@ -9,6 +9,7 @@
 #include "libcask/co_await.h"
 #include "libcask/co_define.h"
 #include "libcask/sys_helper.h"
+#include "libcask/inner_fd.h"
 
 #include "http.h"
 #include "ip_geo.h"
@@ -17,6 +18,7 @@
 #include "site.h"
 #include "socks5.h"
 
+#define TPROXY_TUNNEL_TIMEOUT 60
 #define TPROXY_BIND_PORT 1234
 #define TUNNEL_BIND_PORT 1212
 #define TUNNEL_BUFFER_SIZE 65536
@@ -183,6 +185,7 @@ int peek_http_host(const int client_fd, int is_https, char *buffer,
 
 int connect_target(const struct sockaddr_in *target_addr) {
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  set_inner_fd_timeout(sockfd, TPROXY_TUNNEL_TIMEOUT);
   socklen_t addr_len = sizeof(struct sockaddr_in);
   int ret = connect(sockfd, (const struct sockaddr *)target_addr, addr_len);
   if (ret) {
@@ -327,6 +330,7 @@ void server(void *ip, void *op) {
       break;
     }
 
+    set_inner_fd_timeout(client_fd, TPROXY_TUNNEL_TIMEOUT);
     pinfo->client_fd = client_fd;
     getsockname(client_fd, (struct sockaddr *)&(pinfo->intended_addr),
                 &dest_addr_len);

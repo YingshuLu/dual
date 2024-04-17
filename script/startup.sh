@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 
-grep -qw dual /etc/passwd || echo "dual:x:0:0:::" >> /etc/passwd
+ip link set eth0 promisc on
 
 cwd=`pwd`
-sudo -u dual env LD_LIBRARY_PATH=$cwd/lib $cwd/proxy
+
+cd $cwd
+
+bash $cwd/net_clean.sh
+bash $cwd/net_setup.sh
+
+env LD_LIBRARY_PATH=$cwd/lib $cwd/proxy

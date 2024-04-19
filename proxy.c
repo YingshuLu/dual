@@ -113,7 +113,14 @@ void do_tunnel(void *ip, void *op) {
       break;
     }
 
+    // libcask defect: socket fd can only be resumed in one coroutine,
+    // hook write may replace the read event yield. So that
+    // the read coroutine would never have chance to resume.
+    // workaround: disable hook write, the socket fd is only
+    // polled in one coroutine. 
+    co_disable_hook();
     n = write(pinfo->write_fd, buffer, n);
+    co_enable_hook();
     if (n <= 0) {
       break;
     }

@@ -2,7 +2,7 @@
 
 ip link set eth0 promisc on
 
-cwd=`pwd`
+cwd=`dirname "$0"`
 
 cd $cwd
 

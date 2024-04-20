@@ -1,10 +1,12 @@
-#include <arpa/inet.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/resource.h>
+#include <sys/socket.h>
 
 #include "libcask/co_await.h"
 #include "libcask/co_define.h"
@@ -46,7 +48,28 @@ struct tunnel_info {
   struct tunnel_state *state;
 };
 
+void set_ulimit() {
+  struct rlimit limit;
+  int res = 0;
+  res = getrlimit(RLIMIT_NOFILE, &limit);
+  if (res != 0) {
+    ERR_LOG("getrlimit failure: %d", res);
+    exit(EXIT_FAILURE);
+  }
+
+  limit.rlim_cur = 65536;
+  limit.rlim_max = 131072;
+
+  res = setrlimit(RLIMIT_NOFILE, &limit);
+  if (res != 0) {
+    ERR_LOG("setrlimit faile");
+    exit(EXIT_FAILURE);
+  }
+}
+
 void init() {
+  set_ulimit();
+  
   tunnel_addr.sin_family = AF_INET;
   inet_pton(AF_INET, LOCALHOST, &tunnel_addr.sin_addr.s_addr);
   tunnel_addr.sin_port = htons(TUNNEL_BIND_PORT);
@@ -102,6 +125,17 @@ void free_tunnel_info(struct tunnel_info *pinfo) {
   free(pinfo);
 }
 
+int dup_socket(int fd) {
+  inner_fd* ifd = get_inner_fd(fd);
+  if (!ifd) return -1;
+  int nfd = dup(fd);
+  inner_fd* infd = new_inner_fd(nfd);
+  infd->flags = ifd->flags;
+  infd->user_flags = ifd->user_flags;
+  infd->timeout = ifd->timeout;
+  return nfd;
+}
+
 void do_tunnel(void *ip, void *op) {
   struct tunnel_info *pinfo = (struct tunnel_info *)ip;
 
@@ -113,14 +147,7 @@ void do_tunnel(void *ip, void *op) {
       break;
     }
 
-    // libcask defect: socket fd can only be resumed in one coroutine,
-    // hook write may replace the read event yield. So that
-    // the read coroutine would never have chance to resume.
-    // workaround: disable hook write, the socket fd is only
-    // polled in one coroutine. 
-    co_disable_hook();
     n = write(pinfo->write_fd, buffer, n);
-    co_enable_hook();
     if (n <= 0) {
       break;
     }
@@ -132,9 +159,9 @@ void do_tunnel(void *ip, void *op) {
   close(pinfo->read_fd);
   if (pinfo->state->closed == 0) {
     pinfo->state->closed = 1;
-    DBG_LOG("shutdown socket %d", pinfo->write_fd);
     shutdown(pinfo->write_fd, SHUT_RDWR);
   }
+  close(pinfo->write_fd);
 
   if (pinfo->record) {
     pinfo->record->bytes += count;
@@ -291,7 +318,7 @@ void do_proxy(void *ip, void *op) {
   co_create(do_tunnel, tinfo, 0);
 
   struct tunnel_info *rinfo =
-      new_tunnel_info(pinfo->target_fd, pinfo->client_fd, pstate);
+      new_tunnel_info(dup_socket(pinfo->target_fd), dup_socket(pinfo->client_fd), pstate);
   co_create(do_tunnel, rinfo, 0);
 
   free_proxy_info(pinfo);

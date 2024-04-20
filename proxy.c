@@ -69,7 +69,7 @@ void set_ulimit() {
 
 void init() {
   set_ulimit();
-  
+
   tunnel_addr.sin_family = AF_INET;
   inet_pton(AF_INET, LOCALHOST, &tunnel_addr.sin_addr.s_addr);
   tunnel_addr.sin_port = htons(TUNNEL_BIND_PORT);
@@ -154,8 +154,8 @@ void do_tunnel(void *ip, void *op) {
     count += n;
   }
 
-  DBG_LOG("tunnel [%d] -> [%d] with %d bytes", pinfo->read_fd, pinfo->write_fd,
-          count);
+  DBG_LOG("tunnel [%d] -> [%d] with %d bytes", 
+          pinfo->read_fd, pinfo->write_fd, count);
   close(pinfo->read_fd);
   if (pinfo->state->closed == 0) {
     pinfo->state->closed = 1;
@@ -319,6 +319,7 @@ void do_proxy(void *ip, void *op) {
 
   struct tunnel_info *rinfo =
       new_tunnel_info(dup_socket(pinfo->target_fd), dup_socket(pinfo->client_fd), pstate);
+  rinfo->record = refer_record(record);
   co_create(do_tunnel, rinfo, 0);
 
   free_proxy_info(pinfo);

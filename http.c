@@ -19,12 +19,12 @@ int http_host(const char *buffer, size_t buffer_len, const char **host,
               size_t *host_len) {
   const char *method, *path;
   int minor_version;
-  struct phr_header headers[100];
-  size_t method_len, path_len, num_headers;
+  struct phr_header headers[30];
+  size_t method_len = 0, path_len = 0;
+  size_t num_headers = sizeof(headers) / sizeof(headers[0]);
 
   int pret = phr_parse_request(buffer, buffer_len, &method, &method_len, &path,
-                               &path_len, &minor_version, headers, &num_headers,
-                               buffer_len);
+                               &path_len, &minor_version, headers, &num_headers, 0);
 
   if (pret < 0) {
     return pret;

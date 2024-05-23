@@ -25,6 +25,7 @@
 #define TUNNEL_BIND_PORT 1212
 #define TUNNEL_BUFFER_SIZE 65536
 #define LOCALHOST "127.0.0.1"
+#define DATABASE_ROTATION_PERIOD (12 * 3600 * 1000)
 
 struct sockaddr_in tunnel_addr;
 
@@ -403,7 +404,7 @@ void site_branch(void *ip, void *op) {
     } else {
       INF_LOG("ipgeo reloaded!");
     }
-    co_sleep(12 * 3600 * 1000);
+    co_sleep(DATABASE_ROTATION_PERIOD);
   } while (1);
 }
 

@@ -183,7 +183,7 @@ int site_jailed(const char *host, const size_t host_len) {
   if (!left || left == end || count < 2) {
     found = 0;
   } else {
-    found = database_find(left, end - left);
+    found = site_jailed(left, end - left);
   }
   return found;
 }

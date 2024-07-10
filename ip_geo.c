@@ -81,11 +81,11 @@ int ipgeo_fetch(const char *filename) {
 int ipgeo_update() {
   char filename[64] = {0};
   snprintf(filename, 64, "ipgeo-%d.mmdb", file_rotate);
-  file_rotate = 1 - file_rotate;
   int res = ipgeo_fetch(filename);
   if (res != 0) {
     return res;
   }
+  file_rotate = 1 - file_rotate;
 
   return ipgeo_load(filename);
 }

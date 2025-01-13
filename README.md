@@ -20,9 +20,7 @@
 
 # 部署环境
 * 路由器 DHCP 默认网关设置为 dual 所在设备的内网IP
-* dual 所在设备需要运行 [wstunnel](https://github.com/erebe/wstunnel) :
-  ```usr/local/bin/wstunnel client --http-upgrade-path-prefix $Secert -L 'socks5://0.0.0.0:1212'  wss://${remote_server:port}```
-* 机场运行 wstunnel on wss://${remote_server:port}
+* dual 所在设备和外网机场需要运行 [wssocks5](https://github.com/yingshulu/wssocks5)
 
 # 启动
 ```sudo ./startup.sh ```

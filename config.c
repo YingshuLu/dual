@@ -7,7 +7,7 @@
 #define TPROXY_TUNNEL_TIMEOUT 60
 #define TPROXY_BIND_PORT 1234
 #define TUNNEL_BIND_PORT 1212
-#define DATABASE_ROTATION_PERIOD (12 * 3600)
+#define DATABASE_ROTATION_PERIOD (12 * 3600 * 1000)
 
 configuration g_config;
 
@@ -37,7 +37,7 @@ void init_configuration() {
     g_config.enable_logging = 0;
     g_config.enforced_domains = NULL;
     g_config.database_rotation = DATABASE_ROTATION_PERIOD;
-    g_config.tunnel_timeout = TPROXY_TUNNEL_TIMEOUT * 1000;
+    g_config.tunnel_timeout = TPROXY_TUNNEL_TIMEOUT;
     g_config.listen_port = TPROXY_BIND_PORT;
     g_config.tunnel_port = TUNNEL_BIND_PORT;
 }
@@ -60,7 +60,7 @@ void set_configuration(cJSON* root) {
 
     const cJSON* database_rotation = cJSON_GetObjectItem(root, "database_rotation");
     if (cJSON_IsNumber(database_rotation)) {
-        g_config.database_rotation = database_rotation->valueint;
+        g_config.database_rotation = database_rotation->valueint * 1000;
     }
 
     const cJSON* enable_logging = cJSON_GetObjectItem(root, "enable_logging");

@@ -5,6 +5,7 @@
 
 #include "libcask/co_define.h"
 
+#include "config.h"
 #include "record.h"
 #include "refer.h"
 
@@ -29,6 +30,10 @@ char *addr_string(const struct sockaddr_in *addr) {
 }
 
 int record_draw(struct record *record) {
+  if (config()->enable_logging) {
+    return 0;
+  }
+
   char sql_buffer[1024] = {0};
 
   char *src = addr_string(&record->from);

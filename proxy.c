@@ -13,6 +13,7 @@
 #include "libcask/sys_helper.h"
 #include "libcask/inner_fd.h"
 
+#include "config.h"
 #include "http.h"
 #include "ip_geo.h"
 #include "record.h"
@@ -20,12 +21,8 @@
 #include "site.h"
 #include "socks5.h"
 
-#define TPROXY_TUNNEL_TIMEOUT 60
-#define TPROXY_BIND_PORT 1234
-#define TUNNEL_BIND_PORT 1212
 #define TUNNEL_BUFFER_SIZE 65536
 #define LOCALHOST "127.0.0.1"
-#define DATABASE_ROTATION_PERIOD (12 * 3600 * 1000)
 
 struct sockaddr_in tunnel_addr;
 
@@ -71,9 +68,14 @@ void set_ulimit() {
 void init() {
   set_ulimit();
 
+  int ret = parse_configuration("./dual.json");
+  if (ret != 0) {
+    ERR_LOG("ERROR: parse configuration error %d", ret);
+  }
+
   tunnel_addr.sin_family = AF_INET;
   inet_pton(AF_INET, LOCALHOST, &tunnel_addr.sin_addr.s_addr);
-  tunnel_addr.sin_port = htons(TUNNEL_BIND_PORT);
+  tunnel_addr.sin_port = htons(config()->tunnel_port);
 
   if (0 != ipgeo_load("./GeoLite2-Country.mmdb")) {
     INF_LOG("ERROR: ipgeo failed to load MMDB");
@@ -220,7 +222,7 @@ int peek_http_host(const int client_fd, int is_https, char *buffer,
 
 int connect_target(const struct sockaddr_in *target_addr) {
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  set_inner_fd_timeout(sockfd, TPROXY_TUNNEL_TIMEOUT);
+  set_inner_fd_timeout(sockfd, config()->tunnel_timeout);
   socklen_t addr_len = sizeof(struct sockaddr_in);
   int ret = connect(sockfd, (const struct sockaddr *)target_addr, addr_len);
   if (ret) {
@@ -243,6 +245,7 @@ void do_proxy(void *ip, void *op) {
   // check site
   int host_jailed = 0;
   int site_peeked = 0;
+  int enforce = 0;
   int intended_port = ntohs(pinfo->intended_addr.sin_port);
   if (http_port(intended_port)) {
     const char *intended_host = NULL;
@@ -343,7 +346,7 @@ void server(void *ip, void *op) {
   struct sockaddr_in bind_addr;
   bind_addr.sin_family = AF_INET;
   inet_pton(AF_INET, listen_addr, &bind_addr.sin_addr.s_addr);
-  bind_addr.sin_port = htons(TPROXY_BIND_PORT);
+  bind_addr.sin_port = htons(config()->listen_port);
 
   if (bind(listener_fd, (struct sockaddr *)&bind_addr, sizeof(bind_addr)) < 0)
     crash("bind failed");
@@ -351,7 +354,7 @@ void server(void *ip, void *op) {
   if (listen(listener_fd, 10) < 0)
     crash("listen failed");
 
-  INF_LOG("TPROXY listening on %s:%d", listen_addr, TPROXY_BIND_PORT);
+  INF_LOG("TPROXY listening on %s:%d", listen_addr, config()->listen_port);
 
   while (1) {
     struct proxy_info *pinfo = new_proxy_info();
@@ -366,7 +369,7 @@ void server(void *ip, void *op) {
       break;
     }
 
-    set_inner_fd_timeout(client_fd, TPROXY_TUNNEL_TIMEOUT);
+    set_inner_fd_timeout(client_fd, config()->tunnel_timeout);
     pinfo->client_fd = client_fd;
     getsockname(client_fd, (struct sockaddr *)&(pinfo->intended_addr),
                 &dest_addr_len);
@@ -404,7 +407,7 @@ void site_branch(void *ip, void *op) {
     } else {
       INF_LOG("ipgeo reloaded!");
     }
-    co_sleep(DATABASE_ROTATION_PERIOD);
+    co_sleep(config()->database_rotation);
   } while (1);
 }
 

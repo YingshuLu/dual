@@ -1,7 +1,7 @@
 {
     "listen_port": 1234,
     "tunnel_port": 1212,
-    "tunnel_timeout": 60,
+    "tunnel_timeout": 6000,
     "database_rotation": 86400,
     "enable_logging": 0,
     "enforced_domains": [

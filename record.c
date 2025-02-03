@@ -30,7 +30,7 @@ char *addr_string(const struct sockaddr_in *addr) {
 }
 
 int record_draw(struct record *record) {
-  if (config()->enable_logging) {
+  if (!config()->enable_logging) {
     return 0;
   }
 

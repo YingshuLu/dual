@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -245,7 +246,6 @@ void do_proxy(void *ip, void *op) {
   // check site
   int host_jailed = 0;
   int site_peeked = 0;
-  int enforce = 0;
   int intended_port = ntohs(pinfo->intended_addr.sin_port);
   if (http_port(intended_port)) {
     const char *intended_host = NULL;
@@ -259,6 +259,15 @@ void do_proxy(void *ip, void *op) {
 
     if (site_peeked) {
       host_jailed = site_jailed(intended_host, host_len);
+      if(!host_jailed) {
+        for (int index = 0; index < config()->enforced_domains_count; index++) {
+          const char* domain = config()->enforced_domains[index];
+          if (domain && strncasecmp(intended_host, domain, host_len) == 0) {
+            host_jailed = 1;
+            break;
+          }
+        }
+      }
       INF_LOG("site %.*s jailed: %d", host_len, intended_host, host_jailed);
       record->site_jailed = host_jailed;
       memcpy(&(record->host[0]), intended_host, host_len);

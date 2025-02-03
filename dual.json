@@ -5,6 +5,6 @@
     "database_rotation": 86400,
     "enable_logging": 0,
     "enforced_domains": [
-        "google.com"
+        "qq.com"
     ]
 }

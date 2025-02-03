@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+port=$1
+if [ -z "$port" ]; then
+    port=1234
+fi
+
 # reference: https://mritd.com/2022/02/06/clash-tproxy/
 
 set -ex
@@ -32,7 +37,7 @@ iptables -t mangle -A PREROUTING -p tcp -m socket -j dual_mark
 # redirect tproxy
 iptables -t mangle -N dual_proxy
 
-iptables -t mangle -A dual_proxy -p tcp -j TPROXY --tproxy-mark 0x1/0x1 --on-port 1234 --on-ip 127.0.0.1
+iptables -t mangle -A dual_proxy -p tcp -j TPROXY --tproxy-mark 0x1/0x1 --on-port $port --on-ip 127.0.0.1
 
 iptables -t mangle -A PREROUTING -j dual_proxy
 

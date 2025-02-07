@@ -134,7 +134,7 @@ site_matcher* new_site_matcher(const char* url, const char* database_name) {
     psite->database_name = database_name;
 
     _sqlite_operator.sqlite_init(psite->database_name, &psite->db);
-    return (site_matcher*)psite;
+    return psite;
 }
 
 int site_matcher_find(site_matcher* p, const char *host, const size_t host_len) {
@@ -194,7 +194,7 @@ int site_matcher_reload(site_matcher* pmatcher) {
   }
 
   sqlite3* db;
-  int rc = _sqlite_operator.sqlite_init(pmatcher->database_name, &db);
+  int rc = _sqlite_operator.sqlite_open(pmatcher->database_name, &db);
   if (rc == SQLITE_OK) {
     const char *ptr = body, *end = body + body_len;
     const char *ds, *de;

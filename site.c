@@ -29,14 +29,6 @@ int site_init() {
 }
 
 int site_load() {
-  if (jail_matcher == 0) {
-    jail_matcher = new_site_matcher(jailed_list_url, jailed_sqlite);
-  }
-
-  if (ad_matcher == 0) {
-    ad_matcher = new_site_matcher(ad_list_url, ad_sqlite);
-  }
-
   site_matcher_reload(jail_matcher);
   site_matcher_reload(ad_matcher);
   return 0;

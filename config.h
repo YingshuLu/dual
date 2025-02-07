@@ -7,6 +7,7 @@ typedef struct {
     int tunnel_timeout;
     int database_rotation;
     int enable_logging;
+    int ad_shield;
     char** enforced_domains;
     int enforced_domains_count;
 } configuration;

@@ -3,6 +3,7 @@
     "tunnel_port": 1212,
     "tunnel_timeout": 6000,
     "database_rotation": 86400,
+    "ad_shield": 0,
     "enable_logging": 0,
     "enforced_domains": [
         "qq.com"

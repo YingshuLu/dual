@@ -87,6 +87,11 @@ void init() {
   if (0 != rc) {
     INF_LOG("ERROR: record init failed");
   }
+
+  rc = site_init();
+  if (0 != rc) {
+    INF_LOG("ERROR: site init failed");
+  }
 }
 
 void crash(const char *msg) {
@@ -246,6 +251,7 @@ void do_proxy(void *ip, void *op) {
   // check site
   int host_jailed = 0;
   int site_peeked = 0;
+  int site_block_result = 0;
   int intended_port = ntohs(pinfo->intended_addr.sin_port);
   if (http_port(intended_port)) {
     const char *intended_host = NULL;
@@ -258,6 +264,11 @@ void do_proxy(void *ip, void *op) {
                             TUNNEL_BUFFER_SIZE, &intended_host, &host_len);
 
     if (site_peeked) {
+      if (config()->ad_shield) {
+        site_block_result = site_ad(intended_host, host_len);
+        INF_LOG("AD block domain %.*s", (int)host_len, intended_host);
+      }
+
       host_jailed = site_jailed(intended_host, host_len);
       if(!host_jailed) {
         for (int index = 0; index < config()->enforced_domains_count; index++) {
@@ -272,6 +283,12 @@ void do_proxy(void *ip, void *op) {
       record->site_jailed = host_jailed;
       memcpy(&(record->host[0]), intended_host, host_len);
     }
+  }
+
+  if (site_block_result) {
+    close(pinfo->client_fd);
+    free_proxy_info(pinfo);
+    return;
   }
 
   // policy to decide if tunneling or not

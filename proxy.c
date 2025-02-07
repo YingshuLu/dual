@@ -266,7 +266,7 @@ void do_proxy(void *ip, void *op) {
     if (site_peeked) {
       if (config()->ad_shield) {
         site_block_result = site_ad(intended_host, host_len);
-        INF_LOG("AD block domain %.*s", (int)host_len, intended_host);
+        INF_LOG("AD block domain %.*s result: %d", (int)host_len, intended_host, site_block_result);
       }
 
       host_jailed = site_jailed(intended_host, host_len);

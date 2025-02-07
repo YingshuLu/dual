@@ -22,7 +22,7 @@ void dump_configuration() {
     INF_LOG("tunnel_timeout = %d", g_config.tunnel_timeout);
     INF_LOG("database_rotation = %d", g_config.database_rotation);
     INF_LOG("enable_logging = %d", g_config.enable_logging);
-    INF_LOG("ad_shield = %s", g_config.ad_shield);
+    INF_LOG("ad_shield = %d", g_config.ad_shield);
 
     INF_LOG("enforced_domains:");
     for (int i = 0; i < g_config.enforced_domains_count; i++) {

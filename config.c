@@ -22,6 +22,7 @@ void dump_configuration() {
     INF_LOG("tunnel_timeout = %d", g_config.tunnel_timeout);
     INF_LOG("database_rotation = %d", g_config.database_rotation);
     INF_LOG("enable_logging = %d", g_config.enable_logging);
+    INF_LOG("ad_shield = %d", g_config.ad_shield);
 
     INF_LOG("enforced_domains:");
     for (int i = 0; i < g_config.enforced_domains_count; i++) {
@@ -40,6 +41,7 @@ void init_configuration() {
     g_config.tunnel_timeout = TPROXY_TUNNEL_TIMEOUT;
     g_config.listen_port = TPROXY_BIND_PORT;
     g_config.tunnel_port = TUNNEL_BIND_PORT;
+    g_config.ad_shield = 0;
 }
 
 void set_configuration(cJSON* root) {
@@ -66,6 +68,11 @@ void set_configuration(cJSON* root) {
     const cJSON* enable_logging = cJSON_GetObjectItem(root, "enable_logging");
     if (cJSON_IsNumber(enable_logging)) {
         g_config.enable_logging = enable_logging->valueint;
+    }
+
+    const cJSON* ad_shield = cJSON_GetObjectItem(root, "ad_shield");
+    if (cJSON_IsNumber(ad_shield)) {
+        g_config.ad_shield = ad_shield->valueint;
     }
         
     const cJSON* enforced_domains = cJSON_GetObjectItem(root, "enforced_domains");

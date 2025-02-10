@@ -80,7 +80,7 @@ struct record *refer_record(struct record *record) {
 }
 
 void defer_record(struct record *record) {
-  if (record && record->ref.cnt == 1) {
+  if (record && atomic_load(&record->ref.cnt) == 1) {
     time(&record->end_unixtime);
     record_draw(record);
   }

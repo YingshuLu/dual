@@ -11,7 +11,7 @@ static const char *ipgeo_database_url =
     "https://cdn.jsdelivr.net/gh/alecthw/mmdb_china_ip_list@release/"
     "Country.mmdb";
 
-volatile MMDB_s *g_mmdb = NULL;
+_Atomic(MMDB_s *) g_mmdb = NULL;
 
 static int file_rotate = 0;
 

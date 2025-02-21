@@ -1,5 +1,6 @@
 #include "site_matcher.h"
 #include "http.h"
+#include "domain.h"
 
 #include "libcask/co_define.h"
 
@@ -14,11 +15,6 @@ typedef struct {
     int (*sqlite_find)(sqlite3* db, const char* domain, const size_t length);
 } sqlite_operator;
 
-int domain_char(char c) {
-  return ('a' <= c && 'z' >= c) || ('A' <= c && 'Z' >= c) ||
-         ('0' <= c && '9' >= c) || '-' == c || '.' == c;
-}
-
 const char *domain_start(const char *ptr, const char *end) {
   while (ptr < end && !domain_char(*ptr)) {
     ptr += 1;
@@ -32,21 +28,6 @@ const char *domain_end(const char *ptr, const char *end) {
     ptr += 1;
   }
   return ptr >= end ? end : ptr;
-}
-
-int verify_domain(const char *domain, const int domain_len) {
-  if (!domain || !domain_len || domain_len > 255) {
-    return -1;
-  }
-
-  const char *ptr = domain, *end = domain + domain_len;
-  while (ptr < end) {
-    if (!domain_char(*ptr)) {
-      return -1;
-    }
-    ptr += 1;
-  }
-  return 0;
 }
 
 int sqlite_init(const char* databse_name, sqlite3** pdb) {
@@ -66,7 +47,7 @@ int sqlite_init(const char* databse_name, sqlite3** pdb) {
 }
 
 int sqlite_insert(sqlite3* db, const char* domain, const size_t domain_len) {
-    if (0 != verify_domain(domain, domain_len)) {
+    if (0 != domain_verify(domain, domain_len)) {
         return -1;
     }
 

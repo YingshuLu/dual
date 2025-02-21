@@ -21,6 +21,7 @@
 #include "refer.h"
 #include "site.h"
 #include "socks5.h"
+#include "domain.h"
 
 #define TUNNEL_BUFFER_SIZE 65536
 #define LOCALHOST "127.0.0.1"
@@ -273,7 +274,8 @@ void do_proxy(void *ip, void *op) {
       if(!host_jailed) {
         for (int index = 0; index < config()->enforced_domains_count; index++) {
           const char* domain = config()->enforced_domains[index];
-          if (domain && strncasecmp(intended_host, domain, host_len) == 0) {
+          const size_t domain_len = strlen(domain);
+          if (domain && domain_match(intended_host, host_len, domain, domain_len) >= 0) {
             host_jailed = 1;
             break;
           }

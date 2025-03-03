@@ -1,3 +1,4 @@
+#include <string.h>
 #include "domain.h"
 
 int domain_char(char c) {

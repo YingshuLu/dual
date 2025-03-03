@@ -81,7 +81,7 @@ static int __callback(void *userdata, int argc, char **argv,
 }
 
 int sqlite_find(sqlite3* db, const char* domain, const size_t length) {
-    if (0 != verify_domain(domain, length)) {
+    if (0 != domain_verify(domain, length)) {
         return -1;
     }
 
